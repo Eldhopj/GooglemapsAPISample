@@ -17,6 +17,8 @@ import com.google.android.gms.common.GoogleApiAvailability;
  *      Check correct version of Google play service installed
  *      Add permissions to the manifest and meta-data's
  *      check permissions and onMapReady (Map Activity)
+ *
+ *Commit 2: Get device location (Map Activity)
  */
 
 public class MainActivity extends AppCompatActivity  {
