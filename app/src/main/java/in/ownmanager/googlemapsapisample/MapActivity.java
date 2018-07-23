@@ -2,23 +2,35 @@ package in.ownmanager.googlemapsapisample;
 
 import android.Manifest;
 import android.content.Intent;
+import android.location.Address;
+import android.location.Geocoder;
 import android.location.Location;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.KeyEvent;
+import android.view.View;
+import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
+import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import pub.devrel.easypermissions.AfterPermissionGranted;
@@ -32,6 +44,12 @@ import pub.devrel.easypermissions.EasyPermissions;
  * Commit 2: Get device location
  *      Getting device location
  *      putting device location in map
+ *
+ * Commit 3:
+ *      Added search functionality
+ *      Added marker
+ *      Added find location button
+ *      Added functionality to refreshCurrentLocation
  * */
 public class MapActivity extends AppCompatActivity implements EasyPermissions.PermissionCallbacks{
 
@@ -39,6 +57,9 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
     private final int LOCATION_PERMISSION_CODE = 1;
     GoogleMap mMap;
     FusedLocationProviderClient fusedLocationProviderClient;
+    EditText searchBar;
+
+    public static final int DEFAULT_ZOOM = 15;
 
     public static boolean permissionsGranted = false;
 
@@ -46,6 +67,8 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_map);
+
+        searchBar = findViewById(R.id.search);
 
         locationPermission();
     }
@@ -62,7 +85,7 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
                 if (permissionsGranted) {
                     getLocation(); //getting your location and showing it on map
                     try {
-
+                        searchBarfun();
                         // shows your location with a blue dot and setLocation icon on map
                         mMap.setMyLocationEnabled(true);
                         mMap.getUiSettings().setMyLocationButtonEnabled(false); // removes the setLocation icon from map , because it will block by search bar
@@ -90,8 +113,13 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
                             Location currentLocation = task.getResult(); // gets the current last known location
 
                             //Move the camera into the current location results
-                            moveCamera(new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude()),
-                                    15f);
+                            if (currentLocation != null) {
+                                moveCamera(new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude()),
+                                        DEFAULT_ZOOM,
+                                        "My Location");
+                            } else {
+                                refreshCurrentLocation();
+                            }
                         }
                     }
                 });
@@ -102,9 +130,20 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
     }
 
     // Move camera in map
-    private void moveCamera(LatLng lat_Lon, float zoom) {
+    private void moveCamera(LatLng lat_Lon, float zoom, String title) {
         Log.d(TAG, "moving Camera lat: " + lat_Lon.latitude + " lon: " + lat_Lon.longitude);
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(lat_Lon, zoom));
+
+        if (!title.equals("My Location")) { // in order to not put marker on my current location , already blue dot is present in there
+            MarkerOptions marker = new MarkerOptions()
+                    .position(lat_Lon)
+                    .title(title);
+            mMap.addMarker(marker);
+        }
+    }
+
+    public void currentLocation(View view) { // For the GPS button on the map
+        getLocation();
     }
 
     //permission checks starts here
@@ -151,4 +190,51 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
     }
     //permission checks ends here
 
+
+    private void searchBarfun() {
+        //when presses enter button on keyboard it accepts the value ( like pressing submit button)
+        searchBar.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+            @Override
+            public boolean onEditorAction(TextView v, int actionId, KeyEvent keyEvent) {
+                if ((keyEvent != null &&
+                        (keyEvent.getKeyCode() == KeyEvent.KEYCODE_ENTER))
+                        || (actionId == EditorInfo.IME_ACTION_DONE)) {
+                    geoSearch();
+                }
+                return false;
+            }
+        });
+    }
+
+    //geo searching
+    private void geoSearch() {
+        String search = searchBar.getText().toString();
+        Geocoder geocoder = new Geocoder(getApplicationContext());//Geocoding is the process of transforming a street address or other description of a location into a (latitude, longitude) coordinate and reverse also
+
+        List<Address> addressList = new ArrayList<>();
+        try {
+            addressList = geocoder.getFromLocationName(search, 1);
+        } catch (IOException e) {
+            Log.d(TAG, "geoSearch error: " + e.getMessage());
+        }
+        if (addressList.size() > 0) {
+            Address address = addressList.get(0);
+            Log.d(TAG, "geoSearch: Found address" + address.toString());
+
+            moveCamera(new LatLng(address.getLatitude(), address.getLongitude()),
+                    DEFAULT_ZOOM,
+                    address.getAddressLine(0));
+        }
+    }
+
+    private void refreshCurrentLocation() {
+        LocationRequest locationRequest = LocationRequest.create();
+        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        locationRequest.setNumUpdates(1);
+    }
+
+    // function to hide keyboard
+    private void hideSoftKeyboard() {
+        this.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+    }
 }
