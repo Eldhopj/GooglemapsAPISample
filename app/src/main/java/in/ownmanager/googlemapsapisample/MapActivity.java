@@ -13,18 +13,29 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
-import android.widget.EditText;
+import android.widget.AdapterView;
+import android.widget.AutoCompleteTextView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.PendingResult;
+import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.places.AutocompletePrediction;
+import com.google.android.gms.location.places.GeoDataClient;
+import com.google.android.gms.location.places.Place;
+import com.google.android.gms.location.places.PlaceBuffer;
+import com.google.android.gms.location.places.Places;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
@@ -33,6 +44,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import in.ownmanager.googlemapsapisample.ModelClass.PlacesModel;
 import pub.devrel.easypermissions.AfterPermissionGranted;
 import pub.devrel.easypermissions.AppSettingsDialog;
 import pub.devrel.easypermissions.EasyPermissions;
@@ -50,14 +62,24 @@ import pub.devrel.easypermissions.EasyPermissions;
  *      Added marker
  *      Added find location button
  *      Added functionality to refreshCurrentLocation
+ * Commit 4:
+ *      implement GoogleApiClient.OnConnectionFailedListener
+ *      Codes for Google places API autoCompleteSuggestions
  * */
-public class MapActivity extends AppCompatActivity implements EasyPermissions.PermissionCallbacks{
+public class MapActivity extends AppCompatActivity implements EasyPermissions.PermissionCallbacks, GoogleApiClient.OnConnectionFailedListener {
 
     private static final String TAG = "MapActivity";
     private final int LOCATION_PERMISSION_CODE = 1;
     GoogleMap mMap;
     FusedLocationProviderClient fusedLocationProviderClient;
-    EditText searchBar;
+    AutoCompleteTextView searchBar;
+    PlaceAutocompleteAdapter placeAutocompleteAdapter;
+    protected GeoDataClient mGeoDataClient;
+    private GoogleApiClient mGoogleApiClient;
+
+    private PlacesModel placesModel;
+
+    public static final LatLngBounds LAT_LNG_BOUNDS = new LatLngBounds(new LatLng(-40, -168), new LatLng(71, 136));
 
     public static final int DEFAULT_ZOOM = 15;
 
@@ -71,6 +93,13 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
         searchBar = findViewById(R.id.search);
 
         locationPermission();
+
+        mGoogleApiClient = new GoogleApiClient // for
+                .Builder(this)
+                .addApi(Places.GEO_DATA_API)
+                .addApi(Places.PLACE_DETECTION_API)
+                .enableAutoManage(this, this)
+                .build();
     }
 
     /**Initialize map*/
@@ -192,6 +221,13 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
 
 
     private void searchBarfun() {
+
+        mGeoDataClient = Places.getGeoDataClient(getApplicationContext()); //provides access to Google's database of local place and business information
+        placeAutocompleteAdapter = new PlaceAutocompleteAdapter(getApplicationContext(),
+                mGeoDataClient, LAT_LNG_BOUNDS, null); //passing values into AutocompleteAdapter
+        searchBar.setAdapter(placeAutocompleteAdapter); // set Adapter into search bar
+
+        searchBar.setOnItemClickListener(autoCompleteClickListener);
         //when presses enter button on keyboard it accepts the value ( like pressing submit button)
         searchBar.setOnEditorActionListener(new TextView.OnEditorActionListener() {
             @Override
@@ -237,4 +273,66 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
     private void hideSoftKeyboard() {
         this.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
     }
+
+    @Override
+    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+        Log.d(TAG, "onConnectionFailed: " + connectionResult.getErrorMessage());
+    }
+
+    //---------------Google places API autoCompleteSuggestions----------------
+    private AdapterView.OnItemClickListener autoCompleteClickListener = new AdapterView.OnItemClickListener() {
+        @Override
+        public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+
+            // we need to get the place id and we need to submit the request to places geo data API to retrieve the place object
+
+            final AutocompletePrediction item = placeAutocompleteAdapter.getItem(position); // Get the item
+            final String placeID; // Get the place ID
+            placeID = item.getPlaceId();
+
+            PendingResult<PlaceBuffer> placeResult = Places.GeoDataApi //submit the request
+                    .getPlaceById(mGoogleApiClient, placeID); // we can submit a list of place id
+            placeResult.setResultCallback(updatePlaceDetailsCallbacks); // submits a request
+        }
+    };
+
+    //This callback interface will give the place object we are looking for
+    private ResultCallback<PlaceBuffer> updatePlaceDetailsCallbacks = new ResultCallback<PlaceBuffer>() { // create callback
+        @Override
+        public void onResult(@NonNull PlaceBuffer places) {
+            if (!places.getStatus().isSuccess()) {
+                Log.d(TAG, "place query unsuccessful : " + places.getStatus().getStatusMessage());
+                places.release(); // must release the place in order to prevent the memory leaks
+                return;
+            }
+            final Place place = places.get(0);//Place object contains info like address, website, phone number....
+
+            try {
+                placesModel = new PlacesModel();
+                //you can get anything you need from places object  some are given below
+                placesModel.setName(place.getName().toString()); // save data into model class inorder to prevent loosing it while releasing the object
+                Log.d(TAG, "onResult: name: " + place.getName());
+                placesModel.setAddress(place.getAddress().toString());
+                Log.d(TAG, "onResult: address: " + place.getAddress());
+                placesModel.setId(place.getId());
+                Log.d(TAG, "onResult: id:" + place.getId());
+                placesModel.setLatlng(place.getLatLng());
+                Log.d(TAG, "onResult: latlng: " + place.getLatLng());
+                placesModel.setRating(place.getRating());
+                Log.d(TAG, "onResult: rating: " + place.getRating());
+                placesModel.setPhoneNumber(place.getPhoneNumber().toString());
+                Log.d(TAG, "onResult: phone number: " + place.getPhoneNumber());
+                placesModel.setWebsiteUri(place.getWebsiteUri());
+                Log.d(TAG, "onResult: website uri: " + place.getWebsiteUri());
+
+                Log.d(TAG, "onResult: place: " + placesModel.toString());
+            } catch (NullPointerException e) {
+                Log.e(TAG, "onResult: NullPointerException: " + e.getMessage());
+            }
+            moveCamera(new LatLng(place.getViewport().getCenter().latitude,
+                    place.getViewport().getCenter().longitude), DEFAULT_ZOOM, placesModel.getName());
+
+            places.release();// release the object inorder to prevent memory leak
+        }
+    };
 }

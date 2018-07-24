@@ -21,6 +21,11 @@ import com.google.android.gms.common.GoogleApiAvailability;
  * Commit 2: Get device location (Map Activity)
  *
  * Commit 3: Added search (Map Activity)
+ *
+ * Commit 4:
+ *      Generate SHA-1  key -> Gradle ( right corner) -> android -> signingReport
+ *      https://console.developers.google.com/ -> Credentials -> select the api key -> Select android and add Package name, SHA-1 key
+ *      Add PlaceAutocompleteAdapter
  */
 
 public class MainActivity extends AppCompatActivity  {
