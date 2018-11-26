@@ -25,6 +25,7 @@ import com.google.android.gms.common.GoogleApiAvailability;
  * Commit 4:
  *      Generate SHA-1  key -> Gradle ( right corner) -> android -> signingReport
  *      https://console.developers.google.com/ -> Credentials -> select the api key -> Select android and add Package name, SHA-1 key
+ *
  *      Add PlaceAutocompleteAdapter
  */
 
@@ -40,7 +41,7 @@ public class MainActivity extends AppCompatActivity  {
     }
 
     /**Play service version correct or not*/
-    public boolean isServicesOK(){
+    public boolean isPlayServicesOK(){
         int available = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(getApplicationContext()); // check whether play service is available or not
         if (available == ConnectionResult.SUCCESS){
             Log.d(TAG, "Google play services working");
@@ -59,7 +60,7 @@ public class MainActivity extends AppCompatActivity  {
     }
 
     public void maps(View view) {
-        if (!isServicesOK()){
+        if (!isPlayServicesOK()){
 //            Toast.makeText(this, "Play services unavailable", Toast.LENGTH_SHORT).show();
            return;
         }

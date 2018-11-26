@@ -68,6 +68,8 @@ import pub.devrel.easypermissions.EasyPermissions;
  * */
 public class MapActivity extends AppCompatActivity implements EasyPermissions.PermissionCallbacks, GoogleApiClient.OnConnectionFailedListener {
 
+
+    /**Note to get location update when location changes (Continuously checks location look GoogleLocationAPINEW)*/
     private static final String TAG = "MapActivity";
     private final int LOCATION_PERMISSION_CODE = 1;
     GoogleMap mMap;
@@ -94,7 +96,7 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
 
         locationPermission();
 
-        mGoogleApiClient = new GoogleApiClient // for
+        mGoogleApiClient = new GoogleApiClient
                 .Builder(this)
                 .addApi(Places.GEO_DATA_API)
                 .addApi(Places.PLACE_DETECTION_API)
@@ -132,7 +134,7 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
         fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(getApplicationContext()); // Initialize fusedLocationProviderClient
         try {
             if (permissionsGranted) { // Checking if the permission is granted or not
-                final com.google.android.gms.tasks.Task<Location> location = fusedLocationProviderClient.getLastLocation();
+                final Task<Location> location = fusedLocationProviderClient.getLastLocation();
 
                 location.addOnCompleteListener(new OnCompleteListener<Location>() {
                     @Override
@@ -147,7 +149,7 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
                                         DEFAULT_ZOOM,
                                         "My Location");
                             } else {
-                                refreshCurrentLocation();
+                                refreshCurrentLocation();  // if there is no last saved location on the phone
                             }
                         }
                     }
@@ -174,50 +176,6 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
     public void currentLocation(View view) { // For the GPS button on the map
         getLocation();
     }
-
-    //permission checks starts here
-    @AfterPermissionGranted(LOCATION_PERMISSION_CODE)
-    private void locationPermission() { //Note : This method must be void and cant able to take any arguments
-        String[] perms = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_NETWORK_STATE}; //Array of permission
-        if (EasyPermissions.hasPermissions(this, perms)) { //check permission is granted or not
-            //code if permission is granted
-            initMap();
-            permissionsGranted = true;
-        } else {
-            EasyPermissions.requestPermissions(this, "Permission needed for map functionality",
-                    LOCATION_PERMISSION_CODE, perms);
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        EasyPermissions.onRequestPermissionsResult(requestCode, permissions, grantResults, this);
-    }
-
-    @Override
-    public void onPermissionsGranted(int requestCode, @NonNull List<String> perms) {
-        locationPermission();
-    }
-
-    @Override
-    public void onPermissionsDenied(int requestCode, @NonNull List<String> perms) {
-        if (EasyPermissions.somePermissionPermanentlyDenied(this, perms)) {
-            new AppSettingsDialog.Builder(this).build().show();
-        }
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode == AppSettingsDialog.DEFAULT_SETTINGS_REQ_CODE){
-            // Do something after user returned from app settings screen, like showing a Toast.
-            Toast.makeText(this,"Welcome Back", Toast.LENGTH_SHORT)
-                    .show();
-        }
-    }
-    //permission checks ends here
 
 
     private void searchBarfun() {
@@ -263,6 +221,7 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
         }
     }
 
+    /**Fetches location from the GPS for one time*/
     private void refreshCurrentLocation() {
         LocationRequest locationRequest = LocationRequest.create();
         locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
@@ -279,7 +238,7 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
         Log.d(TAG, "onConnectionFailed: " + connectionResult.getErrorMessage());
     }
 
-    //---------------Google places API autoCompleteSuggestions----------------
+    //---------------Google places API autoCompleteSuggestions----------------//
     private AdapterView.OnItemClickListener autoCompleteClickListener = new AdapterView.OnItemClickListener() {
         @Override
         public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
@@ -333,6 +292,53 @@ public class MapActivity extends AppCompatActivity implements EasyPermissions.Pe
                     place.getViewport().getCenter().longitude), DEFAULT_ZOOM, placesModel.getName());
 
             places.release();// release the object inorder to prevent memory leak
+            // We Successfully save data's in a model class, so releasing of object wont effect
         }
     };
+    //---------------Google places API autoCompleteSuggestions----------------//
+
+    //-------------------------------------------permission checks-----------------------------------------------//
+    @AfterPermissionGranted(LOCATION_PERMISSION_CODE)
+    private void locationPermission() { //Note : This method must be void and cant able to take any arguments
+        String[] perms = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_NETWORK_STATE}; //Array of permission
+        if (EasyPermissions.hasPermissions(this, perms)) { //check permission is granted or not
+            //code if permission is granted
+            initMap();
+            permissionsGranted = true;
+        } else {
+            EasyPermissions.requestPermissions(this, "Permission needed for map functionality",
+                    LOCATION_PERMISSION_CODE, perms);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        EasyPermissions.onRequestPermissionsResult(requestCode, permissions, grantResults, this);
+    }
+
+    @Override
+    public void onPermissionsGranted(int requestCode, @NonNull List<String> perms) {
+        locationPermission();
+    }
+
+    @Override
+    public void onPermissionsDenied(int requestCode, @NonNull List<String> perms) {
+        if (EasyPermissions.somePermissionPermanentlyDenied(this, perms)) {
+            new AppSettingsDialog.Builder(this).build().show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == AppSettingsDialog.DEFAULT_SETTINGS_REQ_CODE){
+            // Do something after user returned from app settings screen, like showing a Toast.
+            Toast.makeText(this,"Welcome Back", Toast.LENGTH_SHORT)
+                    .show();
+        }
+    }
+    //-------------------------------------------permission checks-----------------------------------------------//
+
 }
